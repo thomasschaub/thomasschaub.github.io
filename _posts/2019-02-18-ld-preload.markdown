@@ -2,9 +2,12 @@
 layout: post
 title:  "Code injection using LD_PRELOAD"
 date:   2019-02-18 19:56:47 +0100
-categories: jekyll update
+categories: linux
 ---
-On a typical desktop Linux system, the majority of the programs link dynamically against one or more libraries.
+On a typical desktop Linux system, the majority of programs links dynamically against one or more libraries.
+In this post, we are going to explore a mechanism, through which we can intercept any call to any dynamic library and replace it with our own code.
+
+Let's start with an example.
 The `ldd` command prints the list of shared libraries required by an application.
 Using `ldd` to examine the `ls` command on Ubuntu 18.04 yields:
 
@@ -22,17 +25,17 @@ $ ldd /bin/ls
 We see that `ls` links against, for example, the C standard library (`libc.so.6`).
 It is unclear which functions from the C standard library are used exactly, but it is pretty safe to assume that `ls` uses `malloc`.
 
-When you run a dynamically linked executable (such as `ls`), upon process creation, the operating system dispatches to a dynamic linker, usually `ld-linux.so.2`, .
+When you run a dynamically linked executable (such as `ls`), upon process creation, the operating system dispatches to a dynamic linker, usually `ld-linux.so.2`.
 The dynamic linkers locates and loads shared libraries and executes the program afterwards.
 When `ls` calls `malloc`, it is the dynamic linker's job to resolve the symbol.
 
 Interestingly, there is nothing special about `ld-linux.so.2`.
-It gets selected by the OS, because `ls` defines it in an ELF program header.
+It gets selected by the OS, because `ls` references it in an ELF program header.
 At the end of the day, the dyanmic linker is just another program.
-Like many other programs, `ld-linux.so.2` has configuration options.
-In this post I want to highlight the `LD_PRELOAD` option.
+Like many other programs, `ld-linux.so.2` has runtime options.
+For this post, we are going to make use of the `LD_PRELOAD` option.
 
-If `LD_PRELOAD` is set to a shared object path, the dynamic linker will load the given library and consider it during symbol resolution.
+If the `LD_PRELOAD` environment variable is set to a shared object path, the dynamic linker will load the given library and consider it during symbol resolution.
 We can test this by injecting a library that prints something on each call to `malloc`.
 To make our lives easier, we pretend that we ran out of memory and return `NULL`.
 
@@ -93,10 +96,9 @@ CMakeCache.txt	CMakeFiles  cmake_install.cmake  libbar.so  libfoo.so  Makefile
 
 Note that `ls` no longer complains about exhausted memory, but rather prints the contents of the demo repo's build directory.
 
-The technique in this post is used by, for example, [RenderDoc][render-doc], a renderer debugger.
+The technique described in this post is used by, for example, [RenderDoc][render-doc], a renderer debugger.
 RenderDoc captures and serializes all calls a given program makes to a graphics API.
-A capture can later be replayed and analyzed.
-Recording is implemented by using `LD_PRELOAD` to inject `librenderdoc.so`, which provides wrappers for all major graphics APIs.
+This is implemented by using `LD_PRELOAD` to inject `librenderdoc.so`, which provides wrappers for all major graphics APIs.
 
 [man-dlsym]:   https://linux.die.net/man/3/dlsym
 [render-doc]:  https://renderdoc.org
